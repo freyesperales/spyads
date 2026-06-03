@@ -1,0 +1,15 @@
+services:
+  spyads:
+    build: .
+    image: spyads:latest
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-changeme}
+      - NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL:-http://localhost:3000}
+    volumes:
+      - spyads_data:/data
+
+volumes:
+  spyads_data:
