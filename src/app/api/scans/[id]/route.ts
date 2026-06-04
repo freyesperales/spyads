@@ -25,6 +25,13 @@ export async function GET(
   } catch {
     /* ignore */
   }
+  let sources: unknown[] = [];
+  try {
+    const parsed: unknown = JSON.parse(row.sources_json ?? "[]");
+    if (Array.isArray(parsed)) sources = parsed;
+  } catch {
+    /* ignore */
+  }
 
   return NextResponse.json({
     id: row.id,
@@ -34,6 +41,7 @@ export async function GET(
     countries,
     resultCount: row.result_count,
     results,
+    sources,
     createdAt: new Date(row.created_at).toISOString(),
     completedAt: row.completed_at
       ? new Date(row.completed_at).toISOString()

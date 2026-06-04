@@ -30,12 +30,20 @@ export function getDb(): Database.Database {
       error TEXT,
       result_count INTEGER NOT NULL DEFAULT 0,
       results_json TEXT NOT NULL DEFAULT '[]',
+      sources_json TEXT NOT NULL DEFAULT '[]',
       created_at INTEGER NOT NULL,
       completed_at INTEGER
     );
     CREATE INDEX IF NOT EXISTS scans_email ON scans(email);
     CREATE INDEX IF NOT EXISTS scans_created ON scans(created_at);
   `);
+  // Migration: existing DBs from before the per-source status column.
+  // Adding a column with a default is non-destructive; skip if already there.
+  try {
+    db.exec(`ALTER TABLE scans ADD COLUMN sources_json TEXT NOT NULL DEFAULT '[]'`);
+  } catch {
+    // Column already exists — fine.
+  }
   _db = db;
   return db;
 }
@@ -53,6 +61,7 @@ export interface ScanRow {
   error: string | null;
   result_count: number;
   results_json: string;
+  sources_json: string;
   created_at: number;
   completed_at: number | null;
 }
@@ -84,12 +93,17 @@ export function insertScan(row: {
   });
 }
 
-export function completeScan(id: string, resultsJson: string, count: number): void {
+export function completeScan(
+  id: string,
+  resultsJson: string,
+  count: number,
+  sourcesJson: string = "[]",
+): void {
   getDb()
     .prepare(
-      `UPDATE scans SET status='done', results_json=?, result_count=?, completed_at=? WHERE id=?`,
+      `UPDATE scans SET status='done', results_json=?, result_count=?, sources_json=?, completed_at=? WHERE id=?`,
     )
-    .run(resultsJson, count, Date.now(), id);
+    .run(resultsJson, count, sourcesJson, Date.now(), id);
 }
 
 export function failScan(id: string, error: string): void {

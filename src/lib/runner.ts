@@ -25,8 +25,16 @@ export function launchScan(scanId: string, input: CreateScanInput): void {
         scrapers,
         onProgress: (ev) => emit(scanId, { kind: "progress", data: ev }),
       });
-      completeScan(scanId, JSON.stringify(result.ads), result.ads.length);
-      emit(scanId, { kind: "done", data: { resultCount: result.ads.length } });
+      completeScan(
+        scanId,
+        JSON.stringify(result.ads),
+        result.ads.length,
+        JSON.stringify(result.sources),
+      );
+      emit(scanId, {
+        kind: "done",
+        data: { resultCount: result.ads.length, sources: result.sources },
+      });
 
       // Email is best-effort and runs detached.
       void deliverScanEmail(scanId);

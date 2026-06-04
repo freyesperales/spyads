@@ -23,6 +23,19 @@ export default async function ScanPage({ params }: PageProps) {
   } catch {
     results = [];
   }
+  let sources: Array<{
+    name: string;
+    status: "ok" | "empty" | "error";
+    count: number;
+    message?: string;
+    hint?: "needs_token" | "rate_limited" | "no_results" | "blocked" | "config";
+  }> = [];
+  try {
+    const parsed: unknown = JSON.parse(row.sources_json ?? "[]");
+    if (Array.isArray(parsed)) sources = parsed as typeof sources;
+  } catch {
+    sources = [];
+  }
 
   const initial = {
     id: row.id,
@@ -31,6 +44,7 @@ export default async function ScanPage({ params }: PageProps) {
     error: row.error,
     resultCount: row.result_count,
     results,
+    sources,
     createdAt: new Date(row.created_at).toISOString(),
     completedAt: row.completed_at
       ? new Date(row.completed_at).toISOString()

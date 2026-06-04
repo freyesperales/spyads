@@ -3,6 +3,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Ad, Platform, ProgressEvent } from "@/lib/types";
 
+interface SourceStatus {
+  name: string;
+  status: "ok" | "empty" | "error";
+  count: number;
+  message?: string;
+  hint?: "needs_token" | "rate_limited" | "no_results" | "blocked" | "config";
+}
+
 interface ScanData {
   id: string;
   brand: string;
@@ -10,6 +18,7 @@ interface ScanData {
   error: string | null;
   resultCount: number;
   results: Ad[];
+  sources?: SourceStatus[];
   createdAt: string;
   completedAt: string | null;
 }
@@ -156,6 +165,10 @@ export function ScanReport({ scanId, initial }: Props) {
 
       {data.status === "running" && (
         <ProgressPanel events={progress} />
+      )}
+
+      {data.status === "done" && data.sources && data.sources.length > 0 && (
+        <SourceStatusPanel sources={data.sources} brand={data.brand} />
       )}
 
       {data.status === "done" && data.results.length > 0 && (
@@ -308,6 +321,151 @@ function ProgressPanel({ events }: { events: ProgressEvent[] }) {
 function Spinner() {
   return (
     <div className="h-4 w-4 rounded-full border-2 border-[var(--color-primary)] border-t-transparent animate-spin" />
+  );
+}
+
+/**
+ * Honest per-source status panel. Shows what each scraper actually
+ * returned and — critically — explains zeros so users don't think the
+ * tool is broken when Meta just blocked us.
+ */
+function SourceStatusPanel({
+  sources,
+  brand,
+}: {
+  sources: SourceStatus[];
+  brand: string;
+}) {
+  const needsToken = sources.some((s) => s.hint === "needs_token");
+  const needsChromium = sources.some((s) => s.hint === "config");
+  const allEmpty = sources.length > 0 && sources.every((s) => s.count === 0);
+
+  return (
+    <div className="grid gap-3">
+      <div className="card p-5">
+        <div className="text-xs uppercase tracking-widest text-[var(--color-text-muted)] mb-3">
+          Source status
+        </div>
+        <ul className="grid gap-2">
+          {sources.map((s) => (
+            <li key={s.name} className="flex items-start gap-3 text-sm">
+              <StatusDot status={s.status} />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="badge badge-primary">{s.name}</span>
+                  <span className="font-medium">
+                    {s.status === "ok" && `${s.count} ads`}
+                    {s.status === "empty" && "0 ads"}
+                    {s.status === "error" && "error"}
+                  </span>
+                </div>
+                {s.message && (
+                  <p className="text-[var(--color-text-muted)] text-xs mt-1">
+                    {s.message}
+                  </p>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {needsToken && (
+        <div
+          className="card p-5 border-l-4"
+          style={{ borderLeftColor: "var(--color-accent)" }}
+        >
+          <h4 className="font-semibold flex items-center gap-2">
+            Set META_ACCESS_TOKEN for reliable Meta data
+          </h4>
+          <p className="text-sm text-[var(--color-text-muted)] mt-2">
+            Without an access token, Meta's anti-bot defences usually return
+            empty for web scraping. The token is free — Meta provides it under
+            the EU Digital Services Act transparency requirement.
+          </p>
+          <ol className="text-sm mt-3 grid gap-1.5 list-decimal pl-5 text-[var(--color-text-muted)]">
+            <li>
+              Sign in at{" "}
+              <a
+                className="underline"
+                href="https://developers.facebook.com/"
+                target="_blank"
+                rel="noreferrer"
+              >
+                developers.facebook.com
+              </a>{" "}
+              and create an app.
+            </li>
+            <li>
+              Apply for{" "}
+              <a
+                className="underline"
+                href="https://www.facebook.com/ads/library/api/"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Ad Library API
+              </a>{" "}
+              access (free, ~1-3 days).
+            </li>
+            <li>
+              Generate a long-lived access token and set <code>META_ACCESS_TOKEN</code>{" "}
+              in <code>.env</code>.
+            </li>
+            <li>Restart the server. Re-scan {brand}.</li>
+          </ol>
+        </div>
+      )}
+
+      {needsChromium && (
+        <div
+          className="card p-5 border-l-4"
+          style={{ borderLeftColor: "var(--color-warning, #f59e0b)" }}
+        >
+          <h4 className="font-semibold">Chromium not installed</h4>
+          <p className="text-sm text-[var(--color-text-muted)] mt-2">
+            The Google scraper uses Playwright + Chromium. Run once on this
+            machine:
+          </p>
+          <pre className="bg-[var(--color-bg-soft)] rounded p-3 mt-2 text-xs mono overflow-x-auto">
+            npx playwright install chromium
+          </pre>
+        </div>
+      )}
+
+      {allEmpty && !needsToken && !needsChromium && (
+        <div
+          className="card p-5 border-l-4"
+          style={{ borderLeftColor: "var(--color-text-muted)" }}
+        >
+          <h4 className="font-semibold">No ads found across any source</h4>
+          <p className="text-sm text-[var(--color-text-muted)] mt-2">
+            Possible reasons:
+          </p>
+          <ul className="text-sm text-[var(--color-text-muted)] mt-2 list-disc pl-5 grid gap-1">
+            <li><strong>{brand}</strong> isn&apos;t running disclosed ads in the selected region right now.</li>
+            <li>The brand only runs SEO / partnerships / sales, never paid ads.</li>
+            <li>Anti-bot defences silently blocked us. Try again in a few minutes.</li>
+            <li>For non-political Meta ads outside the EU, the Ad Library only shows political/issue ads — set META_ACCESS_TOKEN for full coverage.</li>
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StatusDot({ status }: { status: SourceStatus["status"] }) {
+  const color =
+    status === "ok"
+      ? "var(--color-success, #22c55e)"
+      : status === "empty"
+        ? "var(--color-text-muted)"
+        : "var(--color-danger)";
+  return (
+    <span
+      className="inline-block w-2.5 h-2.5 rounded-full mt-1.5 shrink-0"
+      style={{ background: color }}
+    />
   );
 }
 

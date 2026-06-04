@@ -11,7 +11,19 @@ import type { ProgressEvent } from "./types";
 
 export type BusEvent =
   | { kind: "progress"; data: ProgressEvent }
-  | { kind: "done"; data: { resultCount: number } }
+  | {
+      kind: "done";
+      data: {
+        resultCount: number;
+        sources?: Array<{
+          name: string;
+          status: "ok" | "empty" | "error";
+          count: number;
+          message?: string;
+          hint?: string;
+        }>;
+      };
+    }
   | { kind: "error"; data: { message: string } };
 
 type Listener = (ev: BusEvent) => void;

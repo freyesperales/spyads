@@ -187,16 +187,15 @@ const MX_TIMEOUT_MS = 4000;
 async function hasMxRecord(domain: string): Promise<"yes" | "no" | "timeout"> {
   // Race the lookup against a timer. If DNS is slow we'd rather show
   // the user an error than freeze the form for 30 seconds.
-  const result = await Promise.race([
-    dns
-      .resolveMx(domain)
-      .then((records) => (records.length > 0 ? "yes" : "no"))
-      .catch(() => "no"),
-    new Promise<"timeout">((resolve) =>
-      setTimeout(() => resolve("timeout"), MX_TIMEOUT_MS),
-    ),
-  ]);
-  return result;
+  type MxResult = "yes" | "no" | "timeout";
+  const lookup: Promise<MxResult> = dns
+    .resolveMx(domain)
+    .then((records): MxResult => (records.length > 0 ? "yes" : "no"))
+    .catch((): MxResult => "no");
+  const timeout: Promise<MxResult> = new Promise((resolve) =>
+    setTimeout(() => resolve("timeout"), MX_TIMEOUT_MS),
+  );
+  return Promise.race([lookup, timeout]);
 }
 
 // --- Public API -----------------------------------------------------------
