@@ -4,6 +4,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
 const COUNTRY_OPTIONS = [
+  // Empty value = no country filter. Lets Meta/Google return ads from
+  // every country they expose for this advertiser.
+  { code: "", label: "Any country (broadest)" },
   { code: "US", label: "United States" },
   { code: "GB", label: "United Kingdom" },
   { code: "CA", label: "Canada" },
@@ -11,10 +14,13 @@ const COUNTRY_OPTIONS = [
   { code: "DE", label: "Germany" },
   { code: "FR", label: "France" },
   { code: "ES", label: "Spain" },
+  { code: "IT", label: "Italy" },
   { code: "MX", label: "Mexico" },
   { code: "BR", label: "Brazil" },
   { code: "CL", label: "Chile" },
   { code: "AR", label: "Argentina" },
+  { code: "PE", label: "Peru" },
+  { code: "CO", label: "Colombia" },
 ];
 
 export function ScanForm() {
@@ -22,7 +28,8 @@ export function ScanForm() {
   const search = useSearchParams();
   const [brand, setBrand] = useState("");
   const [email, setEmail] = useState("");
-  const [country, setCountry] = useState("US");
+  // Default to "Any country" — broader results out of the box.
+  const [country, setCountry] = useState("");
   const [company, setCompany] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
