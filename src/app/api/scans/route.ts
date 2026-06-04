@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { randomBytes } from "node:crypto";
 import { insertScan } from "@/lib/db";
+import { validateEmail } from "@/lib/email-validator";
 import { rateLimit } from "@/lib/ratelimit";
 import { launchScan } from "@/lib/runner";
 import { createScanSchema } from "@/lib/schemas";
@@ -43,12 +44,25 @@ export async function POST(req: Request) {
     );
   }
   const input = parsed.data;
+
+  // Stricter email check after zod's basic shape pass: blocks disposable
+  // domains and confirms the domain has an MX record. This is the
+  // load-bearing piece of "asdas.e" rejection — zod's `.email()` will
+  // happily accept many shapes that no provider actually delivers to.
+  const emailCheck = await validateEmail(input.email);
+  if (!emailCheck.ok) {
+    return NextResponse.json(
+      { error: `email: ${emailCheck.message}`, reason: emailCheck.reason },
+      { status: 400 },
+    );
+  }
+
   const id = randomBytes(10).toString("hex");
 
   insertScan({
     id,
     brand: input.brand,
-    email: input.email,
+    email: emailCheck.normalized,
     company: input.company || undefined,
     countries: input.countries,
     utmSource: input.utmSource,
