@@ -160,12 +160,45 @@ On the client, `<ScanReport>` opens an `EventSource` to `/api/scans/[id]/events`
 - `src/lib/orchestrator.ts` — parallel runner, error-isolating
 - `src/lib/events.ts` — in-memory pub/sub for SSE
 - `src/lib/runner.ts` — glues scan persistence to the orchestrator
+- `src/lib/email.ts` — Resend integration, graceful no-op when unset
+- `src/lib/pdf.ts` — Playwright-driven PDF render of `/scan/[id]`
 - `src/scrapers/index.ts` — real-or-stub loader
+
+## Email delivery (Resend + PDF)
+
+When a scan completes successfully, the runner fires a detached email task:
+
+1. Open `${NEXT_PUBLIC_SITE_URL}/scan/[id]` in headless Chromium (Playwright reuses the browser instance the Google scraper would have launched anyway).
+2. `page.pdf({ format: 'A4', printBackground: true })` → buffer.
+3. POST to Resend's HTTP API with the PDF attached + a small HTML body linking back to the online report.
+
+Graceful degradation:
+
+- **No `RESEND_API_KEY` / `EMAIL_FROM`** → email step logs `[email] skipping send` and the scan flow is unaffected. The user still sees the report on screen.
+- **No Chromium installed** → PDF step logs the failure, then email is sent without an attachment (link-only).
+- **Resend rejects** (bad domain, quota) → logged + returns false, never throws.
+
+Setup:
+
+```bash
+# 1. Install Chromium once for the PDF renderer (also used by the Google scraper)
+npx playwright install chromium
+
+# 2. Sign up at https://resend.com (free 3,000/mo, 100/day)
+#    Verify a sender domain (5-min DNS step)
+
+# 3. Set the env vars in .env
+RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxx
+EMAIL_FROM="spyads <reports@your-domain.com>"
+NEXT_PUBLIC_SITE_URL=https://spyads.io   # so the PDF renders the right host
+```
+
+Want classic SMTP instead? `src/lib/email.ts` is the only file you'd rewrite — drop in `nodemailer` and reuse the same `sendScanReport(opts)` signature.
 
 ## Scope cuts (things I deliberately punted)
 
-- Email sending after a scan — the README claims we'll email a copy of the report, but actually wiring SMTP/Resend is left as a TODO. The lead's email is captured so you can hook this up later.
 - Multi-process / horizontal scale — the SSE bus and rate limiter both live in process memory. Single-node deploys are fine; for horizontal scale, swap both for Redis.
+- Drip / follow-up sequences — only one email is sent (the report). Weekly tracking / "we noticed X new ads since last scan" is a v0.2 idea.
 - Real social-proof logos — the landing page shows brand-name badges as a placeholder.
 - Mobile hamburger menu — the header just hides nav links below `sm`, which is enough for a landing page but not a real app.
 - Test coverage of API routes — the test suite focuses on the orchestrator (the most failure-prone piece). API routes are covered by manual smoke testing during build.
